@@ -1,26 +1,15 @@
-from features.ask_gpt.ask_gpt import ask_gpt
-from features.calendar.event_handler import create_calander_event, get_calendar_event
-from features.notes.note_handler import create_note, get_note
-from features.remember.remember import remember, store_to_db
-from flask import Flask
-
-
-import os
-
-
-
-from openai import OpenAI
-
+import json
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow, Flow
-
-
 from flask import Flask, jsonify
 from google.oauth2 import service_account
 import googleapiclient.discovery
 
-
+from features.ask_gpt.ask_gpt import ask_gpt
+from features.calendar.event_handler import create_calander_event, get_calendar_event
+from features.notes.note_handler import create_note, get_note
+from features.remember.remember import store_to_db
 
 
 app = Flask(__name__, static_folder="static")
@@ -39,8 +28,13 @@ SCOPES = [
     "openid"
 ]
 
-credentials_path = PATH + "static/credential.json"
-token_path = PATH + "static/token.json"
+with open('main.json', 'r') as file:
+    data = json.load(file)
+
+credentials_path = PATH + data.get('credentials_path', 'None')   
+token_path = PATH + data.get('token_path', 'None')
+gdrive_folder_url = data.get('gdrive_folder_url', 'None')
+folder_id = extract_folder_id(gdrive_folder_url)
 
 
 
@@ -62,7 +56,8 @@ def analyze_command(prefix, auth_code, voice_input):
     elif "schedule" in voice_input.lower():
        output = create_calander_event(voice_input, creds)
     elif "get note" in voice_input.lower():
-       output = get_note(voice_input)
+       # use the phrase "keyword" to search for the exact word in all the notes
+       output = get_note(voice_input, token_path, folder_id)
     elif "create note" in voice_input.lower():
        output = create_note(voice_input)
     elif "remember" in voice_input.lower():
@@ -82,6 +77,14 @@ def get_creds_from_auth_code(auth_code):
   flow.fetch_token(code=auth_code)
   credentials = flow.credentials
   return credentials
+
+def extract_folder_id(url):
+    parts = url.split('/')
+    if "folders" in parts:
+        folder_id_index = parts.index("folders") + 1
+        if folder_id_index < len(parts):
+            return parts[folder_id_index]
+    return None
 
 if DOMAIN != publicDomain:
     if __name__ == '__main__':
