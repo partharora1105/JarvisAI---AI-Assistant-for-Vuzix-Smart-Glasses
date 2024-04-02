@@ -8,7 +8,7 @@ open_ai_key ="" #os.getenv("OPENAI_API_KEY")
 
 
 def get_calendar_event(voice_input, creds):
-  data = get_desired_date_obj(voice_input)
+  data = get_date_obj(voice_input)
 
   start_year = data['start_year']
   start_month = data['start_month']
@@ -47,7 +47,7 @@ def get_calendar_event(voice_input, creds):
 
 
 def create_calander_event(voice_input, creds):
-  data = get_desired_date_obj(voice_input)
+  data = get_date_obj(voice_input)
 
   start_year = data['start_year']
   start_month = data['start_month']
@@ -86,16 +86,16 @@ def create_calander_event(voice_input, creds):
     print(f"An error occurred: {error}")
     return f"An error occurred: {error}"
   
-def get_desired_date_obj(voice_input):
+def get_date_obj(voice_input):
     client = OpenAI(
       api_key=open_ai_key
     )
     
-    mic_record = voice_input
+    
     now = datetime.now()
     curr_details = now.strftime("%H:%M:%S %Y-%m-%d %A")
     query = "The date & time now is"+ curr_details + \
-        "and the transcripted voice recording is: "+ mic_record + \
+        "and the transcripted voice recording is: "+ voice_input + \
         "Based on the current date & time as well as the transcripted voice recording, fill in the JSON format specified" \
         "Return the JSON format specified, do not return anything else."
 

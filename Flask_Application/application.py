@@ -7,7 +7,8 @@ from google.oauth2 import service_account
 import googleapiclient.discovery
 
 from features.ask_gpt.ask_gpt import ask_gpt
-from features.calendar.event_handler import create_calander_event, get_calendar_event
+from features.calendar.calendar_handler import create_calander_event, get_calendar_event
+from features.contact.contact_handler import create_contact
 from features.notes.note_handler import create_note, get_note
 from features.remember.remember import store_to_db
 
@@ -25,6 +26,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/contacts"
     "openid"
 ]
 
@@ -68,6 +70,8 @@ def analyze_command(prefix, auth_code, voice_input):
        output = get_note(voice_input)
     elif "create note" in voice_input.lower():
        output = create_note(voice_input)
+    elif "contact" in voice_input.lower():
+       output = create_contact(voice_input)
     elif "remember" in voice_input.lower():
        output = store_to_db(voice_input)
     else:
