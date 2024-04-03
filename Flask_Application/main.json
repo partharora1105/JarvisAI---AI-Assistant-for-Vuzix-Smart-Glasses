@@ -1,7 +1,6 @@
 {
     "token_path": "credentials/token.json",
     "credentials_path": "credentials/credentials.json",
-    "gdrive_folder_url":"",
     "pinecone_index_name": "",
     "llm_model_name": "gpt-3.5-turbo"
 }

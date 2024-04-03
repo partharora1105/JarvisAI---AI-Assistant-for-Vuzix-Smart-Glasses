@@ -34,8 +34,9 @@ with open('main.json', 'r') as file:
 
 credentials_path = PATH + data.get('credentials_path', 'None')   
 token_path = PATH + data.get('token_path', 'None')
-gdrive_folder_url = data.get('gdrive_folder_url', 'None')
 
+#TODO store & get folder URL in a seperate db based on the user
+gdrive_folder_url = data.get('gdrive_folder_url', 'None')
 def extract_folder_id(url):
     parts = url.split('/')
     if "folders" in parts:
