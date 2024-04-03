@@ -3,9 +3,7 @@ import os
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
-from flask import Flask, jsonify
-from google.oauth2 import service_account
-import googleapiclient.discovery
+from flask import Flask
 
 from features.ask_gpt.ask_gpt import ask_gpt
 from features.calendar.calendar_handler import create_calander_event, get_calendar_event
@@ -70,7 +68,7 @@ def analyze_command(prefix, auth_code, voice_input):
             output = get_note(voice_input)
         elif "create note" in voice_input.lower():
             output = create_note(voice_input)
-        elif "contact" in voice_input.lower():
+        elif "create contact" in voice_input.lower():
             output = create_contact(voice_input)
         elif "remember" in voice_input.lower():
             output = store_to_db(voice_input)

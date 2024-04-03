@@ -1,85 +1,76 @@
-import requests
+import json
 from openai import OpenAI
+from googleapiclient.discovery import build
 
 open_ai_key ="" #os.getenv("OPENAI_API_KEY")
+
     
 def create_contact(voice_input, creds):
   data = get_contact_obj(voice_input)
+  service = build('people', 'v1', credentials=creds)
   
-  
-  
+  try: 
+    contact = service.people().createContact(body=data).execute()
+    contact = f"Contact : {data['names'][0]['givenName']},\n Number : {data['numbers'][0]['value']},\n"
+    return contact
+  except Exception as error:
+      print(f"An error occurred: {error}")
+      return f"An error occurred: {error}"
+
 def get_contact_obj(voice_input):
-    client = OpenAI(
-      api_key=open_ai_key
-    )
-    
-    query = "The transcripted voice recording is: "+ voice_input + \
-        "Based on the transcripted voice recording, fill in the JSON format specified" \
-        "Return the JSON format specified, do not return anything else."
+  client = OpenAI(
+    api_key=open_ai_key
+  )
+  
+  query = "The transcripted voice recording is: "+ voice_input + \
+      "Based on the transcripted voice recording, fill in the JSON format specified" \
+      "Return the JSON format specified, do not return anything else."
 
-    functions = [
-      {
-        "name": "add_contactt",
-        "description": "Adds a new contact to the contact list",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "description": "name of the event"
-            },
-            "event_description": {
-              "type": "string",
-              "description": "The description of the event"
-            },
-            "start_year": {
-              "type": "integer",
-              "description": "The year in which the event starts"
-            },
-            "end_year": {
-              "type": "integer",
-              "description": "The year in which the event ends"
-            },
-            "start_month": {
-              "type": "integer",
-              "description": "The month in which the event start"
-            },
-            "end_month": {
-              "type": "integer",
-              "description": "The month in which the event ends"
-            },
-            "start_day": {
-              "type": "integer",
-              "description": "The day in which the event starts"
-            },
-            "end_day": {
-              "type": "integer",
-              "description": "The day in which the event ends"
-            },
-            "start_time": {
-              "type": "integer",
-              "description": "The start time in 24hr format"
-            },
-            "end_time": {
-              "type": "integer",
-              "description": "The end time in 24hr format. If no time is specified, the end time should be one hour after the start"
-            }
+  functions = [
+    {
+      "name": "add_contact",
+      "description": "Creates a new contact in the contact list",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "given_name": {
+            "type": "string",
+            "description": "name of the person"
           },
-          "required": ["name", "event_description", "start_year", "start_month", "start_day", "start_time", "end_year", "end_month", "end_day", "end_time"]
-        }
-      },
+          "phone_number": {
+            "type": "string",
+            "description": "The phone number of the person"
+          },
+        },
+        "required": ["given_name", "phone_number"]
+      }
+    },
+  ]
+
+  completion = client.chat.completions.create(
+    model="gpt-3.5-turbo-0613",
+    messages=[
+      {"role": "user", "content": query}
+      ],
+    functions=functions,
+    stream=False,
+  )
+
+  data = json.loads(completion.choices[0].message.function_call.arguments)
+  data = get_google_contact_obj(data)
+  return data
+    
+def get_google_contact_obj(data):
+  contact = {
+    "names": [
+      {
+        "givenName": data['given_name']
+      }
+    ],
+    "phoneNumbers": [
+      {
+        "value": data['phone_number']
+      }
     ]
-
-    completion = client.chat.completions.create(
-      model="gpt-3.5-turbo-0613",
-      messages=[
-        {"role": "user", "content": query}
-        ],
-      functions=functions,
-      stream=False,
-    )
-
-    data = json.loads(completion.choices[0].message.function_call.arguments)
-    return data
-    
-    
+  }
+  return contact
