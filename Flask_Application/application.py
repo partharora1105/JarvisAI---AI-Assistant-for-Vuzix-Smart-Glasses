@@ -1,7 +1,8 @@
 import json
+import os
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow, Flow
+from google_auth_oauthlib.flow import Flow
 from flask import Flask, jsonify
 from google.oauth2 import service_account
 import googleapiclient.discovery
@@ -57,39 +58,53 @@ def hello_world():
 @app.route("/everyday/wear/rest/api/speech/output/<prefix>/<auth_code>/<voice_input>")
 def analyze_command(prefix, auth_code, voice_input):
     # TODO manual parsing vs llm to decide which function to call
+    try:
+        auth_code = f"{prefix}/{auth_code}"
+        creds = get_creds_from_auth_code(auth_code)
+
+        if "event" in voice_input.lower():
+            output = get_calendar_event(voice_input, creds)
+        elif "schedule" in voice_input.lower():
+            output = create_calander_event(voice_input, creds)
+        elif "get note" in voice_input.lower():
+            output = get_note(voice_input)
+        elif "create note" in voice_input.lower():
+            output = create_note(voice_input)
+        elif "contact" in voice_input.lower():
+            output = create_contact(voice_input)
+        elif "remember" in voice_input.lower():
+            output = store_to_db(voice_input)
+        else:
+            output = ask_gpt(voice_input)
+        
+        return output
+    except Exception as e:
+        return str(e)
+
+def get_creds_from_auth_code(auth_code=None):
+    credentials = None
     
-    auth_code = f"{prefix}/{auth_code}"
-    creds = get_creds_from_auth_code(auth_code)
-
-    if "event" in voice_input.lower():
-       output = get_calendar_event(voice_input, creds)
-    elif "schedule" in voice_input.lower():
-       output = create_calander_event(voice_input, creds)
-    elif "get note" in voice_input.lower():
-       # use the phrase "keyword" to search for the exact word in all the notes
-       output = get_note(voice_input)
-    elif "create note" in voice_input.lower():
-       output = create_note(voice_input)
-    elif "contact" in voice_input.lower():
-       output = create_contact(voice_input)
-    elif "remember" in voice_input.lower():
-       output = store_to_db(voice_input)
-    else:
-       output = ask_gpt(voice_input)
+    if os.path.exists(token_path):
+        credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
     
-    return output
-
-
-def get_creds_from_auth_code(auth_code):
-  flow = Flow.from_client_secrets_file(
-        credentials_path,
-        scopes=SCOPES,
-        redirect_uri='urn:ietf:wg:oauth:2.0:oob'  # This redirect URI is used for apps that do not have a web server
-  )
-  flow.fetch_token(code=auth_code)
-  credentials = flow.credentials
-  return credentials
-
+    if not credentials or not credentials.valid:
+        if credentials and credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+        elif auth_code:
+            flow = Flow.from_client_secrets_file(
+                credentials_path,
+                scopes=SCOPES,
+                redirect_uri='urn:ietf:wg:oauth:2.0:oob'  # This redirect URI is used for apps that do not have a web server
+            )
+            flow.fetch_token(code=auth_code)
+            credentials = flow.credentials
+            
+            with open(token_path, 'w') as token:
+                token.write(credentials.to_json())
+        else:
+            raise Exception("No valid authorization code or refresh token available.")
+    
+    return credentials
 
 if DOMAIN != publicDomain:
     if __name__ == '__main__':

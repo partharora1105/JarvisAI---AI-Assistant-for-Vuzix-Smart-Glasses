@@ -7,6 +7,7 @@ def create_contact(voice_input, creds):
   data = get_contact_obj(voice_input)
   
   
+  
 def get_contact_obj(voice_input):
     client = OpenAI(
       api_key=open_ai_key
@@ -18,8 +19,8 @@ def get_contact_obj(voice_input):
 
     functions = [
       {
-        "name": "add_event",
-        "description": "Adds a new event to the calendar",
+        "name": "add_contactt",
+        "description": "Adds a new contact to the contact list",
         "parameters": {
           "type": "object",
           "properties": {

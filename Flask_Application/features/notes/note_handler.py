@@ -6,6 +6,8 @@ from langchain.chains import retrieval_qa
 from langchain_community.vectorstores import PineconeVectorStore  
 from pinecone import Pinecone
 
+# TODO use the phrase "keyword" to search for the exact word in all the notes
+
 openai_api_key ="" #os.getenv("OPENAI_API_KEY")
 pinecone_api_key = "" #os.getenv("PINECONE_API_KEY")
 
