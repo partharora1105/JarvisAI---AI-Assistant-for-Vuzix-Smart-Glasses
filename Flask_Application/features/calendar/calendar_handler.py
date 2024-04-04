@@ -6,6 +6,10 @@ from openai import OpenAI
 
 open_ai_key ="" #os.getenv("OPENAI_API_KEY")
 
+with open('main.json', 'r') as file:
+  data = json.load(file)
+
+llm_model_name = data.get('llm_model_name', 'gpt-3.5-turbo')
 
 def get_calendar_event(voice_input, creds):
   data = get_date_obj(voice_input)
@@ -153,7 +157,7 @@ def get_date_obj(voice_input):
     ]
 
     completion = client.chat.completions.create(
-      model="gpt-3.5-turbo-0613",
+      model=llm_model_name,
       messages=[
         {"role": "user", "content": query}
         ],
