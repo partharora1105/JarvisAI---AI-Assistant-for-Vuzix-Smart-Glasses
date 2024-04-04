@@ -57,6 +57,7 @@ def hello_world():
 @app.route("/everyday/wear/rest/api/speech/output/<prefix>/<auth_code>/<voice_input>")
 def analyze_command(prefix, auth_code, voice_input):
     # TODO manual parsing vs llm to decide which function to call
+    # TODO pass llm_model_name & pinecone_index_name to functions
     try:
         auth_code = f"{prefix}/{auth_code}"
         creds = get_creds_from_auth_code(auth_code)
@@ -80,12 +81,14 @@ def analyze_command(prefix, auth_code, voice_input):
     except Exception as e:
         return str(e)
 
+#TODO create route for parse_gdrive_folder(folder_id, pinecone_index_name, llm_model_name)
+
 def get_creds_from_auth_code(auth_code=None):
     credentials = None
-    
+
     if os.path.exists(token_path):
         credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
-    
+
     if not credentials or not credentials.valid:
         if credentials and credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
@@ -102,7 +105,7 @@ def get_creds_from_auth_code(auth_code=None):
                 token.write(credentials.to_json())
         else:
             raise Exception("No valid authorization code or refresh token available.")
-    
+
     return credentials
 
 if DOMAIN != publicDomain:

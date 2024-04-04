@@ -3,6 +3,7 @@ from openai import OpenAI
 from googleapiclient.discovery import build
 
 open_ai_key ="" #os.getenv("OPENAI_API_KEY")
+
 with open('main.json', 'r') as file:
   data = json.load(file)
 
