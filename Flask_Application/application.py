@@ -1,23 +1,15 @@
-from flask import Flask
-from datetime import datetime
-
-import os
-
 import json
-
-from openai import OpenAI
-
+import os
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow, Flow
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+from google_auth_oauthlib.flow import Flow
+from flask import Flask
 
-from flask import Flask, jsonify
-from google.oauth2 import service_account
-import googleapiclient.discovery
-
-
+from features.ask_gpt.ask_gpt import ask_gpt
+from features.calendar.calendar_handler import create_calander_event, get_calendar_event
+from features.contact.contact_handler import create_contact
+from features.notes.note_handler import create_note, get_note
+from features.remember.remember import store_to_db
 
 
 app = Flask(__name__, static_folder="static")
@@ -33,243 +25,89 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/contacts",
+    "https://www.googleapis.com/auth/drive"
     "openid"
 ]
-open_ai_key ="" # remember to use key
-credentials_path = PATH + "static/credential.json"
-token_path = PATH + "static/token.json"
 
+with open('main.json', 'r') as file:
+    data = json.load(file)
+
+credentials_path = PATH + data.get('credentials_path', 'None')   
+token_path = PATH + data.get('token_path', 'None')
+
+#TODO store & get folder URL in a seperate db based on the user
+gdrive_folder_url = data.get('gdrive_folder_url', 'None')
+def extract_folder_id(url):
+    parts = url.split('/')
+    if "folders" in parts:
+        folder_id_index = parts.index("folders") + 1
+        if folder_id_index < len(parts):
+            return parts[folder_id_index]
+    return None
+
+folder_id = extract_folder_id(gdrive_folder_url)
 
 
 @app.route('/')
 def hello_world():
-    return 'Hello from Thad!'
+    return 'Jarvis says Hello World!'
 
 
 #"https://ccghwd.pythonanywhere.com/everyday/wear/rest/api/speech/output/<prefix>/<auth_code>/<voice_input>"
 @app.route("/everyday/wear/rest/api/speech/output/<prefix>/<auth_code>/<voice_input>")
 def analyze_command(prefix, auth_code, voice_input):
-    auth_code = f"{prefix}/{auth_code}"
-    if "event" in voice_input.lower():
-       output = get_events_calander(voice_input, auth_code)
-    elif "schedule" in voice_input.lower():
-       output = schedule_calander(voice_input, auth_code)
-    elif "notes" in voice_input.lower():
-       output = "notes smth"
-       output = pull_up_notes(voice_input)
-    else:
-       output = general_gpt(voice_input)
-    return output
-    #return output # f"Anv passed {voice_input} with code {auth_code}"
+    # TODO manual parsing vs llm to decide which function to call
+    # TODO pass llm_model_name & pinecone_index_name to functions
+    try:
+        auth_code = f"{prefix}/{auth_code}"
+        creds = get_creds_from_auth_code(auth_code)
 
-def general_gpt(voice_input):
-  client = OpenAI(
-    api_key=open_ai_key
-  ) 
-  completion = client.chat.completions.create(
-  model="gpt-3.5-turbo",
-  messages=[
-    {"role": "system", "content": "You are a helpful assistant Jarvis who responds in less than 20 words"},
-    {"role": "user", "content": voice_input}
-    ]
-  ) 
-  return completion.choices[0].message.content  
+        if "event" in voice_input.lower():
+            output = get_calendar_event(voice_input, creds)
+        elif "schedule" in voice_input.lower():
+            output = create_calander_event(voice_input, creds)
+        elif "get note" in voice_input.lower():
+            output = get_note(voice_input)
+        elif "create note" in voice_input.lower():
+            output = create_note(voice_input)
+        elif "create contact" in voice_input.lower():
+            output = create_contact(voice_input)
+        elif "remember" in voice_input.lower():
+            output = store_to_db(voice_input)
+        else:
+            output = ask_gpt(voice_input)
+        
+        return output
+    except Exception as e:
+        return str(e)
 
-def pull_up_notes(voice_input):
-  with open(PATH + 'static/notes.txt', 'r') as file:
-    # Read all lines of the file
-    notes = file.readlines()
-  prompt = f"Based on the command - \"{voice_input}\", return the relevant notes for the user \
-  from the following (answer in less than 20 words and remove any non alphanumeric \
-  characters): {notes}" 
-  client = OpenAI(
-    api_key=open_ai_key
-  ) 
-  
-  completion = client.chat.completions.create(
-  model="gpt-3.5-turbo",
-  messages=[
-    {"role": "user", "content": prompt}
-    ]
-  ) 
-  return completion.choices[0].message.content  
+#TODO create route for parse_gdrive_folder(folder_id, pinecone_index_name, llm_model_name)
 
-def get_desired_date_data(voice_input):
-    client = OpenAI(
-      api_key=open_ai_key
-    )
-    
-    mic_record = voice_input
-    now = datetime.now()
-    curr_details = now.strftime("%H:%M:%S %Y-%m-%d %A")
-    query = "The date & time now is"+ curr_details + \
-        "and the transcripted voice recording is: "+ mic_record + \
-        "Based on the current date & time as well as the transcripted voice recording, fill in the JSON format specified" \
-        "Return the JSON format specified, do not return anything else."
+def get_creds_from_auth_code(auth_code=None):
+    credentials = None
 
-    functions = [
-      {
-        "name": "add_event",
-        "description": "Adds a new event to the calendar",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "description": "name of the event"
-            },
-            "event_description": {
-              "type": "string",
-              "description": "The description of the event"
-            },
-            "start_year": {
-              "type": "integer",
-              "description": "The year in which the event starts"
-            },
-            "end_year": {
-              "type": "integer",
-              "description": "The year in which the event ends"
-            },
-            "start_month": {
-              "type": "integer",
-              "description": "The month in which the event start"
-            },
-            "end_month": {
-              "type": "integer",
-              "description": "The month in which the event ends"
-            },
-            "start_day": {
-              "type": "integer",
-              "description": "The day in which the event starts"
-            },
-            "end_day": {
-              "type": "integer",
-              "description": "The day in which the event ends"
-            },
-            "start_time": {
-              "type": "integer",
-              "description": "The start time in 24hr format"
-            },
-            "end_time": {
-              "type": "integer",
-              "description": "The end time in 24hr format. If no time is specified, the end time should be one hour after the start"
-            }
-          },
-          "required": ["name", "event_description", "start_year", "start_month", "start_day", "start_time", "end_year", "end_month", "end_day", "end_time"]
-        }
-      },
-    ]
+    if os.path.exists(token_path):
+        credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
 
-    completion = client.chat.completions.create(
-      model="gpt-3.5-turbo-0613",
-      messages=[
-        {"role": "user", "content": query}
-        ],
-      functions=functions,
-      stream=False,
-    )
+    if not credentials or not credentials.valid:
+        if credentials and credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+        elif auth_code:
+            flow = Flow.from_client_secrets_file(
+                credentials_path,
+                scopes=SCOPES,
+                redirect_uri='urn:ietf:wg:oauth:2.0:oob'  # This redirect URI is used for apps that do not have a web server
+            )
+            flow.fetch_token(code=auth_code)
+            credentials = flow.credentials
+            
+            with open(token_path, 'w') as token:
+                token.write(credentials.to_json())
+        else:
+            raise Exception("No valid authorization code or refresh token available.")
 
-    data = json.loads(completion.choices[0].message.function_call.arguments)
-    return data
-
-def schedule_calander(voice_input, auth_code):
-  data = get_desired_date_data(voice_input)
-
-  start_year = data['start_year']
-  start_month = data['start_month']
-  start_day = data['start_day']
-  start_time = data['start_time']
-
-  end_year = data['start_year']
-  end_month = data['start_month']
-  end_day = data['start_day']
-  end_time = data['start_time']
-
-  start_timestamp = datetime(start_year, start_month, start_day, start_time).isoformat()
-  end_timestamp = datetime(end_year, end_month, end_day, end_time).isoformat()
-
-  creds = None
-  creds = get_creds_from_auth_code(auth_code)
-  try:
-    service = build("calendar", "v3", credentials=creds)
-    event = {
-      'summary': data['name'],
-      'description': data['event_description'],
-      'start': {
-          'dateTime': start_timestamp,
-          'timeZone': 'America/New_York',
-      },
-      'end': {
-          'dateTime': end_timestamp,
-          'timeZone': 'America/New_York',
-      },
-      'attendees': [
-          {'email': 'xxxxx@gmail.com'},
-      ],
-      }
-    event = service.events().insert(calendarId='primary', body=event).execute()
-    event = f"Event : {data['name']},\n When : {start_timestamp},\n"
-    return event
-  except HttpError as error:
-    print(f"An error occurred: {error}")
-    return f"An error occurred: {error}"
-  
-def get_events_calander(voice_input, auth_code):
-  data = get_desired_date_data(voice_input)
-
-  start_year = data['start_year']
-  start_month = data['start_month']
-  start_day = data['start_day']
-  start_time = data['start_time']
-
-  end_year = data['start_year']
-  end_month = data['start_month']
-  end_day = data['start_day']
-  end_time = data['start_time']
-
-  start_timestamp = datetime(start_year, start_month, start_day, start_time).isoformat()
-  end_timestamp = datetime(end_year, end_month, end_day, end_time).isoformat()
-  output = f"Schedule for {start_timestamp}"
-
-  
-
-  creds = None
-  creds = get_creds_from_auth_code(auth_code)
-  try:
-      service = build("calendar", "v3", credentials=creds)
-      events_result = service.events().list(calendarId='primary', timeMin=start_timestamp, maxResults = 10, singleEvents=True, orderBy='startTime').execute()
-      events = events_result.get('items', [])
-
-      if not events:
-          return "No events found within the specified time range."
-
-      event_list = []
-      for event in events:
-          start = event['start'].get('dateTime', event['start'].get('date'))
-          summary = event['summary']
-          event_list.append(f"Event: {summary},\nWhen: {start}\n")
-
-      output += "\n".join(event_list)
-  except Exception as error:
-      
-      print(f"An error occurred: {error}")
-      return f"An error occurred: {error}"
-      
-  return output
-
-
-def get_creds_from_auth_code(auth_code):
-  flow = Flow.from_client_secrets_file(
-        credentials_path,
-        scopes=SCOPES,
-        redirect_uri='urn:ietf:wg:oauth:2.0:oob'  # This redirect URI is used for apps that do not have a web server
-  )
-  flow.fetch_token(code=auth_code)
-  credentials = flow.credentials
-  return credentials
-
-
-
+    return credentials
 
 if DOMAIN != publicDomain:
     if __name__ == '__main__':
